@@ -3,18 +3,19 @@ on:
   workflow_dispatch:
     inputs:
       target_breach:
-        description: 'The name of the breach to filter for'
+        description: 'Breach Name'
         required: true
       user_manifest:
-        description: 'JSON string of user/breach mapping'
+        description: 'Stringified JSON'
         required: true
 
 jobs:
   filter_logic:
     runs-on: ubuntu-latest
     steps:
+      # v6 uses Node 24, clearing your warning
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6 
 
       - name: Run Filter Script
         shell: python
@@ -22,27 +23,10 @@ jobs:
           TARGET: ${{ github.event.inputs.target_breach }}
           MANIFEST: ${{ github.event.inputs.user_manifest }}
         run: |
-          import os
-          import json
-
+          import os, json
           target = os.getenv('TARGET')
-          manifest = json.loads(os.getenv('MANIFEST'))
-          domain = "example.com"
-
-          # The "Inversion" Logic
-          affected_users = [
-              f"{user}@{domain}" 
-              for user, breaches in manifest.items() 
-              if target in breaches
-          ]
-
-          result = {
-              "breach": target,
-              "affected_users": affected_users,
-              "count": len(affected_users)
-          }
-
-          # Output for the logs (and for the SOAR to scrape via API)
-          print("RESULT_START")
-          print(json.dumps(result))
-          print("RESULT_END")
+          # We parse the stringified JSON back into a dict
+          manifest = json.loads(os.getenv('MANIFEST')) 
+          
+          affected_users = [f"{u}@example.com" for u, b in manifest.items() if target in b]
+          print(f"RESULT_START\n{json.dumps({'breach': target, 'users': affected_users})}\nRESULT_END")
