@@ -1,0 +1,48 @@
+name: HIBP Breach Filter
+on:
+  workflow_dispatch:
+    inputs:
+      target_breach:
+        description: 'The name of the breach to filter for'
+        required: true
+      user_manifest:
+        description: 'JSON string of user/breach mapping'
+        required: true
+
+jobs:
+  filter_logic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Filter Script
+        shell: python
+        env:
+          TARGET: ${{ github.event.inputs.target_breach }}
+          MANIFEST: ${{ github.event.inputs.user_manifest }}
+        run: |
+          import os
+          import json
+
+          target = os.getenv('TARGET')
+          manifest = json.loads(os.getenv('MANIFEST'))
+          domain = "example.com"
+
+          # The "Inversion" Logic
+          affected_users = [
+              f"{user}@{domain}" 
+              for user, breaches in manifest.items() 
+              if target in breaches
+          ]
+
+          result = {
+              "breach": target,
+              "affected_users": affected_users,
+              "count": len(affected_users)
+          }
+
+          # Output for the logs (and for the SOAR to scrape via API)
+          print("RESULT_START")
+          print(json.dumps(result))
+          print("RESULT_END")
