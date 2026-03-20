@@ -1,20 +1,22 @@
 name: HIBP Breach Filter
+
 on:
   workflow_dispatch:
     inputs:
       target_breach:
-        description: 'Breach Name'
+        description: 'Breach Name from SOAR'
         required: true
       user_manifest:
-        description: 'Stringified JSON'
+        description: 'JSON String of users and breaches'
         required: true
 
 jobs:
   filter_logic:
     runs-on: ubuntu-latest
     steps:
+      # v6 uses Node 24 natively
       - name: Checkout code
-        uses: actions/checkout@v6 
+        uses: actions/checkout@v6
 
       - name: Run Filter Script
         shell: python
@@ -22,19 +24,43 @@ jobs:
           TARGET: ${{ github.event.inputs.target_breach }}
           MANIFEST: ${{ github.event.inputs.user_manifest }}
         run: |
-        import os, json
-        target = os.getenv('TARGET')
-        raw_manifest = os.getenv('MANIFEST', '').strip()
-        
-        # If S1 sent it wrapped in single quotes, strip them off
-        if raw_manifest.startswith("'") and raw_manifest.endswith("'"):
-            raw_manifest = raw_manifest[1:-1]
-        
-        try:
-            manifest = json.loads(raw_manifest)
-            affected_users = [f"{u}@example.com" for u, b in manifest.items() if target in b]
-            print(f"RESULT_START\n{json.dumps({'breach': target, 'users': affected_users})}\nRESULT_END")
-        except Exception as e:
-            print(f"Error parsing JSON: {e}")
-            print(f"Raw data received: {raw_manifest}")
-            exit(1)
+          import os
+          import json
+          
+          # 1. Get Environment Variables
+          target = os.getenv('TARGET', '').strip()
+          raw_manifest = os.getenv('MANIFEST', '').strip()
+          
+          # 2. Strip single quotes if S1 wrapped them for escaping
+          if raw_manifest.startswith("'") and raw_manifest.endswith("'"):
+              raw_manifest = raw_manifest[1:-1]
+          
+          print(f"DEBUG: Processing breach '{target}'")
+          
+          try:
+              # 3. Parse the JSON manifest
+              manifest = json.loads(raw_manifest)
+              
+              # 4. Filter: Find users associated with the target breach
+              affected_users = [
+                  f"{u}@example.com" 
+                  for u, breaches in manifest.items() 
+                  if target in breaches
+              ]
+              
+              # 5. Build the Result
+              result = {
+                  "breach": target,
+                  "users": affected_users,
+                  "count": len(affected_users)
+              }
+              
+              # 6. Final Output
+              print("RESULT_START")
+              print(json.dumps(result))
+              print("RESULT_END")
+              
+          except Exception as e:
+              print(f"FATAL ERROR: {str(e)}")
+              print(f"RAW DATA RECEIVED: {raw_manifest}")
+              exit(1)
