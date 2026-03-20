@@ -13,7 +13,6 @@ jobs:
   filter_logic:
     runs-on: ubuntu-latest
     steps:
-      # v6 uses Node 24, clearing your warning
       - name: Checkout code
         uses: actions/checkout@v6 
 
@@ -23,10 +22,19 @@ jobs:
           TARGET: ${{ github.event.inputs.target_breach }}
           MANIFEST: ${{ github.event.inputs.user_manifest }}
         run: |
-          import os, json
-          target = os.getenv('TARGET')
-          # We parse the stringified JSON back into a dict
-          manifest = json.loads(os.getenv('MANIFEST')) 
-          
-          affected_users = [f"{u}@example.com" for u, b in manifest.items() if target in b]
-          print(f"RESULT_START\n{json.dumps({'breach': target, 'users': affected_users})}\nRESULT_END")
+        import os, json
+        target = os.getenv('TARGET')
+        raw_manifest = os.getenv('MANIFEST', '').strip()
+        
+        # If S1 sent it wrapped in single quotes, strip them off
+        if raw_manifest.startswith("'") and raw_manifest.endswith("'"):
+            raw_manifest = raw_manifest[1:-1]
+        
+        try:
+            manifest = json.loads(raw_manifest)
+            affected_users = [f"{u}@example.com" for u, b in manifest.items() if target in b]
+            print(f"RESULT_START\n{json.dumps({'breach': target, 'users': affected_users})}\nRESULT_END")
+        except Exception as e:
+            print(f"Error parsing JSON: {e}")
+            print(f"Raw data received: {raw_manifest}")
+            exit(1)
